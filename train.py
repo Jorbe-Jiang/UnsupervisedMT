@@ -59,7 +59,7 @@ def word_shuffle(batch_words, batch_lengths, k=3):
                 new_ordered_dict[new_idx] = i
                 ordered_index.append(new_idx)
 
-            if new_idx == i or new_ordered_dict.has_key(i):
+            if new_idx == i or (i in new_ordered_dict):
                 continue
             else:
                 selected_index.append(i)
@@ -100,8 +100,6 @@ def word_dropout(batch_words, batch_lengths, drop_rate=0.1):
         new_batch_lengths.append(len(new_words))
         new_batch_mask.append([1.0]*len(new_words) + [0.0]*(max_length - len(new_words)))
 
-    # print keep
-    # print new_batch_words
     return new_batch_words, new_batch_lengths, new_batch_mask
 
 
@@ -147,7 +145,7 @@ def print_mt_eval_results(batched_inputs, batched_targets, batched_preds, step):
             inputs = [slot_name_dict[char] if 'slot_' in char else char for char in inputs]
             targets = [slot_name_dict[char] if 'slot_' in char else char for char in targets]
             preds = [slot_name_dict[char] if 'slot_' in char else char for char in preds]
-            fp.write(' '.join(inputs) + ' | ' + ' '.join(targets) + ' | ' + ' '.join(preds) + '\n')
+            fp.write(' '.join(inputs) + ' | ' + ' '.join(preds) + '\n')
 
     fp.close()
 
@@ -252,6 +250,7 @@ def evaluation(model, sess, valid_data, best_loss, step):
         mt_feed_dict[model.inputs_mt_noise_chars] = inputs_mt_chars
         mt_feed_dict[model.inputs_mt_mask] = inputs_mt_mask
         mt_feed_dict[model.inputs_mt_seq_length] = inputs_mt_seq_length
+        mt_feed_dict[model.keep_rate] = 1.0
 
         # [seq_length, batch_size]
         mt_predictions = sess.run(model.valid_predictions, feed_dict=mt_feed_dict)
@@ -337,8 +336,10 @@ def train_mt():
     with tf.Session(config=config) as sess:
         m.summary_writer.add_graph(sess.graph)
         try_make_model_dir()
-        if tf.train.checkpoint_exists(model_path):
-            saver.restore(sess, model_path)
+        ckpt = tf.train.get_checkpoint_state(model_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            print('Loading pre-trained model from: {}'.format(ckpt.model_checkpoint_path))
+            saver.restore(sess, ckpt.model_checkpoint_path)
             # reset learning rate
             sess.run(m.mt_lr.assign(cfg.mt_lr))
         else:
@@ -396,9 +397,10 @@ def train_mt():
                     print('Epoch: %s step: %s mt_lr: %s mt_loss: %s' % (
                         epoch, step, mt_lr, mt_loss))
 
-                if (step > 0 and step <= 2*n_batches and step % int(n_batches/2) == 0) or (step % int(n_batches/4) == 0 and step > 2*n_batches):
+                if (step > 0 and step <= n_batches and step % int(n_batches/2) == 0) or (step % int(n_batches/4) == 0 and step > n_batches):
                     eval_loss = evaluation_mt(m, sess, valid_mt_data, best_loss, step)
                     curr_mean_loss = eval_loss
+                    # decrease learning rate if no improvement and early stopping
                     if curr_mean_loss >= prev_mean_loss and prev_mean_loss != 0.0 and step >= cfg.start_decay_at:
                         loss_add_counts += 1
                         # 如果连续三次loss都increase，则early stopping
@@ -419,7 +421,7 @@ def train_mt():
                         print('model saved in file : %s' % saved_model_path)
                         saver.save(sess, saved_model_path)
 
-                if step > 2*n_batches:
+                if step > n_batches:
                     cfg.keep_rate = np.minimum(cfg.keep_rate * 1.01, 1.0)
 
 
@@ -460,8 +462,10 @@ def train():
     with tf.Session(config=config) as sess:
         m.summary_writer.add_graph(sess.graph)
         try_make_model_dir()
-        if tf.train.checkpoint_exists(mt_model_path):
-            saver.restore(sess, mt_model_path)
+        ckpt = tf.train.get_checkpoint_state(mt_model_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            print('Loading pre-trained model from: {}'.format(ckpt.model_checkpoint_path))
+            saver.restore(sess, ckpt.model_checkpoint_path)
             # reset learning rate
             sess.run(m.lr.assign(cfg.lr))
         else:
@@ -494,6 +498,7 @@ def train():
                 mt_feed_dict[m.inputs_mt_noise_chars] = inputs_mt_chars
                 mt_feed_dict[m.inputs_mt_mask] = inputs_mt_mask
                 mt_feed_dict[m.inputs_mt_seq_length] = inputs_mt_seq_length
+                mt_feed_dict[m.keep_rate] = 1.0
 
                 # [seq_length, batch_size]
                 mt_predictions = sess.run(m.valid_predictions, feed_dict=mt_feed_dict)
@@ -517,6 +522,7 @@ def train():
                 inputs_mt_sources = np.asarray(batched_mt_sources[shuffle_idx_li[i]], dtype=np.int32)
 
                 feed_dict = {}
+                dis_feed_dict = {}
                 for t in range(cfg.dec_chars_length):
                     feed_dict[m.dec_inputs[t]] = dec_inputs[t]
                     feed_dict[m.dec_targets[t]] = dec_targets[t]
@@ -530,15 +536,20 @@ def train():
                 feed_dict[m.inputs_mt_sources] = inputs_mt_sources
                 feed_dict[m.inputs_mt_noise_chars] = inputs_mt_noise_chars
 
+                dis_feed_dict[m.inputs_mt_sources] = inputs_mt_sources
+                dis_feed_dict[m.inputs_mt_noise_chars] = inputs_mt_noise_chars
+
                 feed_dict[m.inputs_seq_length] = inputs_seq_length
                 feed_dict[m.inputs_mt_seq_length] = inputs_mt_seq_length
+                dis_feed_dict[m.inputs_mt_seq_length] = inputs_mt_seq_length
                 feed_dict[m.keep_rate] = cfg.keep_rate
+                dis_feed_dict[m.keep_rate] = cfg.keep_rate
                 feed_dict[m.mode] = cfg.mode
 
                 cfg.mode = 'train'
 
                 # update discriminator parameters
-                (dis_lr, dis_loss, dis_acc, _) = sess.run(m.dis_lr, m.dis_loss, m.dis_acc, m.dis_train_op, feed_dict=feed_dict)
+                (dis_lr, dis_loss, dis_acc, _) = sess.run((m.dis_lr, m.dis_loss, m.dis_acc, m.dis_train_op), feed_dict=dis_feed_dict)
 
                 (lr, loss, predictions, _, summ) = sess.run((m.lr, m.total_loss, m.predictions, m.train_op, merged_sum), feed_dict=feed_dict)
 
@@ -553,9 +564,10 @@ def train():
                     print('Epoch: %s step: %s lr: %s loss: %s dis_lr: %s dis_loss: %s dis_acc: %s' % (
                         epoch, step, lr, loss, dis_lr, dis_loss, dis_acc))
 
-                if (step > 0 and step <= 2*n_batches and step % int(n_batches/2) == 0) or (step % int(n_batches/4) == 0 and step > 2*n_batches):
+                if (step > 0 and step <= n_batches and step % int(n_batches/2) == 0) or (step % int(n_batches/4) == 0 and step > n_batches):
                     eval_loss = evaluation(m, sess, valid_data, best_loss, step)
                     curr_mean_loss = eval_loss
+                    # decrease learning rate if no improvement and early stopping
                     if curr_mean_loss >= prev_mean_loss and prev_mean_loss != 0.0 and step >= cfg.start_decay_at:
                         loss_add_counts += 1
                         # 如果连续三次loss都increase，则early stopping
@@ -585,10 +597,11 @@ def train():
                         print('model saved in file : %s' % saved_model_path)
                         saver.save(sess, saved_model_path)
 
-                if step > 2*n_batches:
+                if step > n_batches:
                     cfg.keep_rate = np.minimum(cfg.keep_rate * 1.01, 1.0)
 
 
 if __name__ == "__main__":
     train_mt()   # pre-train MT model
-    train()
+    # train()
+

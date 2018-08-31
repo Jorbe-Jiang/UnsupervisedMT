@@ -78,14 +78,14 @@ class Model(object):
 		stacked_bw_rnn = []
 		for i in range(3):
 			stacked_fw_rnn.append(
-				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.enc_hidden_size)))
+				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.enc_hidden_size), output_keep_prob=self.keep_rate))
 			stacked_bw_rnn.append(
-				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.enc_hidden_size)))
+				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.enc_hidden_size), output_keep_prob=self.keep_rate))
 
 		stacked_dec_rnn_li = []
 		for i in range(3):
 			stacked_dec_rnn_li.append(
-				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.dec_hidden_size)))
+				tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(cfg.dec_hidden_size), output_keep_prob=self.keep_rate))
 
 		stacked_dec_rnn = tf.contrib.rnn.MultiRNNCell(stacked_dec_rnn_li)
 
