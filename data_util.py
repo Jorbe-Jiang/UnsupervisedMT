@@ -55,7 +55,7 @@ def word_shuffle(batch_words, batch_lengths, k=3):
                 new_ordered_dict[new_idx] = i
                 ordered_index.append(new_idx)
 
-            if new_idx == i or new_ordered_dict.has_key(i):
+            if new_idx == i or (i in new_ordered_dict):
                 continue
             else:
                 selected_index.append(i)
