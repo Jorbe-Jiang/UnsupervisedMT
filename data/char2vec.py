@@ -25,9 +25,9 @@ vocab_file = 'vocab.txt'
 
 
 def train_char2vec(c2v_dim=100):
-	print 'Training char2vec...'
+	print('Training char2vec...')
 	model = Word2Vec(LineSentence(char2vec_format_corpus), size=c2v_dim, window=5, min_count=5, workers=multiprocessing.cpu_count())
-	print 'End...'
+	print('End...')
 
 	count = 0
 	char_vec_matrix = np.zeros((len(open(vocab_file, 'r').readlines()), c2v_dim), dtype='float')
@@ -40,12 +40,12 @@ def train_char2vec(c2v_dim=100):
 		try:
 			char_vec = model.wv[unicode(c)]
 			char_vec_matrix[idx, :] = char_vec
-			print c
+			print(c)
 		except:
 			count += 1
 			char_vec_matrix[idx, :] = np.random.uniform(-1.0, 1.0, size=(1, c2v_dim))
 
-	print count
+	print(count)
 	np.save(c2v_npy_file, char_vec_matrix)
 
 
