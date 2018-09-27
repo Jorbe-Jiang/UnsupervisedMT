@@ -81,9 +81,7 @@ def word_shuffle(batch_words, batch_lengths, k=3):
             new_batch_words.append([words[0]] + [words[word_idx] for (_, word_idx) in new_ordered_dict] + [words[batch_lengths[idx]-1]] + [PAD_ID]*(max_words_length-batch_lengths[idx]))
         else:
             new_batch_words.append(words)
-            
-        # new_batch_words.append([words[0]] + [words[word_idx] for (_, word_idx) in new_ordered_dict] + [words[batch_lengths[idx]-1]] + [PAD_ID]*(max_words_length-batch_lengths[idx]))
-
+           
     return new_batch_words, batch_lengths
 
 
