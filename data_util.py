@@ -67,14 +67,17 @@ def word_shuffle(batch_words, batch_lengths, k=3):
                         selected_index.append(select_idx)
 
         new_ordered_dict = sorted(new_ordered_dict.items(), key=lambda t: t[0])
-        if len(new_ordered_dict) != (batch_lengths[idx]-2):
-            print(selected_index)
-            print(ordered_index)
-            print(new_ordered_dict)
-            exit()
+        # if len(new_ordered_dict) != (batch_lengths[idx]-2):
+        #     print(selected_index)
+        #     print(ordered_index)
+        #     print(new_ordered_dict)
+        #     exit()
 
-        new_batch_words.append([words[0]] + [words[word_idx] for (_, word_idx) in new_ordered_dict] + [words[batch_lengths[idx]-1]] + [PAD_ID]*(max_words_length-batch_lengths[idx]))
-
+        if len(new_ordered_dict) == (batch_lengths[idx]-2):
+            new_batch_words.append([words[0]] + [words[word_idx] for (_, word_idx) in new_ordered_dict] + [words[batch_lengths[idx]-1]] + [PAD_ID]*(max_words_length-batch_lengths[idx]))
+        else:
+            new_batch_words.append(words)
+           
     return new_batch_words, batch_lengths
 
 
